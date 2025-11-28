@@ -6,26 +6,16 @@ workflows:
       flutter: stable
       xcode: latest
       cocoapods: default
-      vars:
-        XCODE_WORKSPACE: "ios/Runner.xcworkspace"
-        XCODE_SCHEME: "Runner"
-
     scripts:
-      # 1️⃣ Obtener dependencias
-      - name: Flutter pub get
-        script: flutter pub get
-
-      # 2️⃣ Compilar para iOS
-      - name: Build iOS
-        script: |
-          flutter build ios --release --no-codesign
-
+      - flutter clean
+      - flutter pub get
+      - flutter build ios --release --no-codesign
     artifacts:
-      - build/ios/ipa/*.ipa
-      - build/ios/archive/*.xcarchive
-      - **/build/**/*.app
-
+      - "build/ios/ipa/*.ipa"
+      - "build/ios/archive/*.xcarchive"
+      - "**/build/**/*.app"
+      - "**/build/**/*.ipa"
     publishing:
       email:
         recipients:
-          - "sriverasc12@gmail.com"
+          - tu_correo@ejemplo.com
