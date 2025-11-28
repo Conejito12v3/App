@@ -1,7 +1,9 @@
 import 'dart:async';
+// Se elimina haversine manual: usamos GeoService (Geolocator) para distancia.
 import 'package:app_g/screens/historial_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:app_g/services/hive_service.dart';
+import 'package:app_g/services/geo_service.dart';
 import 'package:app_g/components/evento_card.dart';
 import 'package:app_g/models/evento_model.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -60,7 +62,35 @@ class _EventoScreenState extends State<EventoScreen>
     }
   }
 
-  DateTime _calcularTiempoFin(double distancia) {
+  Future<DateTime> _calcularTiempoFin(EventoModel evento) async {
+    double distancia = evento.distancia;
+    // Recalcular si distancia es desconocida (-1) y la alerta tiene coordenadas válidas.
+    if (distancia == -1 && evento.alerta.latitud != 0 && evento.alerta.longitud != 0) {
+      try {
+        final pos = await GeoService.getImmediateLocation();
+        if (pos != null) {
+          final nuevaDist = GeoService.calcularDistancia(
+            pos.latitude,
+            pos.longitude,
+            evento.alerta.latitud,
+            evento.alerta.longitud,
+          );
+            // Si cálculo válido (>=0) actualizamos distancia persistida.
+          if (nuevaDist >= 0) {
+            distancia = nuevaDist;
+            await _box.put(evento.alerta.idAlerta, EventoModel(
+              alerta: evento.alerta,
+              distancia: distancia,
+              timestamp: evento.timestamp,
+              fin: evento.fin,
+            ));
+          }
+        }
+      } catch (e) {
+        debugPrint('Recalculo distancia (GeoService) fallido: $e');
+      }
+    }
+
     if (distancia == -1) return DateTime.now().add(const Duration(minutes: 2));
     if (distancia < 500) return DateTime.now().add(const Duration(seconds: 30));
     if (distancia < 1500) return DateTime.now().add(const Duration(minutes: 1));
@@ -102,10 +132,12 @@ class _EventoScreenState extends State<EventoScreen>
 
       for (var evento in top5) {
         if (evento.fin == null) {
-          final nuevoFin = _calcularTiempoFin(evento.distancia);
+          final nuevoFin = await _calcularTiempoFin(evento);
+          // Recuperar distancia actualizada (puede haber cambiado si era -1)
+          final distanciaFinal = _box.get(evento.alerta.idAlerta)?.distancia ?? evento.distancia;
           final actualizado = EventoModel(
             alerta: evento.alerta,
-            distancia: evento.distancia,
+            distancia: distanciaFinal,
             timestamp: evento.timestamp,
             fin: nuevoFin,
           );
