@@ -8,14 +8,16 @@ workflows:
       cocoapods: default
 
     scripts:
-      - name: Clean & get packages
+      - name: Clean project
         script: |
           flutter clean
+          rm -rf ios/Pods
+          rm -rf ios/Podfile.lock
           flutter pub get
 
       - name: Build iOS Simulator app
         script: |
-          flutter build ios --simulator --no-codesign
+          flutter build ios --simulator --debug
 
       - name: Zip Runner.app for Appetize
         script: |
@@ -23,8 +25,8 @@ workflows:
           zip -r Runner.app.zip Runner.app
 
     artifacts:
-      - "build/ios/iphonesimulator/Runner.app"
-      - "build/ios/iphonesimulator/Runner.app.zip"
+      - build/ios/iphonesimulator/Runner.app
+      - build/ios/iphonesimulator/Runner.app.zip
 
     publishing:
       email:
