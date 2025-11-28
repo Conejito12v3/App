@@ -1,6 +1,6 @@
 platform :ios, '15.0'
 
-# CocoaPods analytics sends network stats synchronously affecting flutter build latency.
+# Evita estadísticas que ralentizan los builds
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
 
 project 'Runner', {
@@ -8,6 +8,9 @@ project 'Runner', {
   'Profile' => :release,
   'Release' => :release,
 }
+
+# Fijar versión de Firebase (opcional pero recomendado)
+$FirebaseSDKVersion = '10.21.0'
 
 def flutter_root
   generated_xcode_build_settings_path = File.expand_path(File.join('..', 'Flutter', 'Generated.xcconfig'), __FILE__)
@@ -27,6 +30,7 @@ require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelpe
 flutter_ios_podfile_setup
 
 target 'Runner' do
+  # Necesario para Firebase en simulador
   use_frameworks!
   use_modular_headers!
 
@@ -36,5 +40,10 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
+
+    # Fix para compilar Firebase en simulador iOS (Appetize usa simulador)
+    target.build_configurations.each do |config|
+      config.build_settings['EXCLUDED_ARCHS[sdk=iphonesimulator*]'] = 'arm64'
+    end
   end
 end
