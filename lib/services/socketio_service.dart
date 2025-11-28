@@ -263,10 +263,57 @@ class SocketioService {
   /// Ping sencillo para comprobar accesibilidad del backend vía socket.
   /// Considera OK cualquier respuesta (aunque sea negocio negativo).
   static Future<bool> ping() async {
+    // Importante: el uso anterior hacía ping reutilizando el evento 'done' con id_alerta=0.
+    // Si el backend no responde ACK para ese caso (p.ej. porque 0 es inválido) el resultado siempre era null
+    // y provocaba reconexiones consecutivas, generando múltiples "Socket conectado..." y finalmente false.
+    // Un ping de salud SOLO necesita comprobar que podemos establecer la conexión base.
     try {
-      final res = await _emitWithAck(event: 'done', data: {'id_alerta': 0}, retries: 1);
-      return res != null;
-    } catch (_) {
+      final connectivity = await Connectivity().checkConnectivity();
+      if (connectivity == ConnectivityResult.none) return false;
+
+      final opts = IO.OptionBuilder()
+          .setTransports(['websocket', 'polling'])
+          .disableAutoConnect()
+          .setPath('/socket.io')
+          .enableReconnection()
+          .setReconnectionAttempts(0) // para ping evitamos reconexiones múltiples
+          .build();
+
+      final socket = IO.io(URL_API, opts);
+      final completer = Completer<bool>();
+
+      void finish(bool ok) {
+        if (!completer.isCompleted) {
+          completer.complete(ok);
+          socket.disconnect();
+        }
+      }
+
+      socket.onConnect((_) {
+        logger.i('Ping: conexión establecida');
+        finish(true);
+      });
+
+      socket.onConnectError((err) {
+        logger.w('Ping: connectError $err');
+        finish(false);
+      });
+
+      socket.onError((err) {
+        logger.w('Ping: error $err');
+        finish(false);
+      });
+
+      logger.i('Ping: intentando conectar a $URL_API');
+      socket.connect();
+
+      return await completer.future.timeout(const Duration(seconds: 6), onTimeout: () {
+        logger.w('Ping: timeout de conexión');
+        socket.disconnect();
+        return false;
+      });
+    } catch (e) {
+      logger.e('Ping: excepción $e');
       return false;
     }
   }
