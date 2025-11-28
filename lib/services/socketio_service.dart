@@ -6,8 +6,8 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 
 class SocketioService {
   // static const String URL_API = 'http://10.0.2.2:3000';
-  static const String URL_API = 'http://192.168.1.119:3000';
-  // static const String URL_API = 'https://sulkies-aubrielle-imprisonable.ngrok-free.dev';
+  // static const String URL_API = 'http://192.168.1.119:3000';
+  static const String URL_API = 'https://sulkies-aubrielle-imprisonable.ngrok-free.dev';
 
   // Cola sencilla para eventos que requieren garantía (ack/done). Cada entrada almacena
   // la función que ejecuta el envío y el número de intentos ya realizados.
