@@ -42,6 +42,25 @@ class AppStateService {
     SocketioService.initRetries();
 
     logger.i('Inicio initialize (force=$force)');
+    // Chequeo rápido de internet para mostrar error inmediato si no hay red
+    final quickStatus = await Connectivity().checkConnectivity();
+    if (quickStatus == ConnectivityResult.none) {
+      logger.w('Sin internet (chequeo rápido), mostrando estado noInternet');
+      _controller.add(AppStatus.noInternet);
+      // Suscribir reintento automático cuando vuelva internet
+      _autoRetryConnectivitySub ??= Connectivity()
+          .onConnectivityChanged
+          .listen((r) async {
+        if (r != ConnectivityResult.none) {
+          _autoRetryConnectivitySub?.cancel();
+          _autoRetryConnectivitySub = null;
+          await initialize();
+        }
+      });
+      _initializing = false;
+      return;
+    }
+
     final internetOk = await _retryConnectivity(attempts: 3);
     if (!internetOk) {
       logger.w('Sin internet tras reintentos, mostrando estado noInternet');
@@ -68,10 +87,31 @@ class AppStateService {
     }
 
     logger.i('Ping al backend vía socket');
+    // Guardia adicional: si en este punto se perdió la conectividad, no intentamos ping
+    final netStatusBeforePing = await Connectivity().checkConnectivity();
+    if (netStatusBeforePing == ConnectivityResult.none) {
+      logger.w('Conectividad perdida antes del ping, mostrando noInternet');
+      _controller.add(AppStatus.noInternet);
+      _initializing = false;
+      return;
+    }
+
     final apiOk = await _checkApiConnection();
     if (!apiOk) {
-      logger.e('Backend no accesible');
-      _controller.add(AppStatus.apiDown);
+      // Si el ping falló por error de DNS/timeout, priorizamos noInternet
+      final status = await Connectivity().checkConnectivity();
+      final pingErr = SocketioService.lastPingError?.toLowerCase() ?? '';
+      final looksOffline = status == ConnectivityResult.none ||
+          pingErr.contains('failed host lookup') ||
+          pingErr.contains('no address associated with hostname') ||
+          pingErr.contains('timeout');
+      if (looksOffline) {
+        logger.w('Ping fallido por falta de conectividad (err="$pingErr"), mostrando noInternet');
+        _controller.add(AppStatus.noInternet);
+      } else {
+        logger.e('Backend no accesible');
+        _controller.add(AppStatus.apiDown);
+      }
       _initializing = false;
       return;
     }
@@ -151,5 +191,15 @@ class AppStateService {
       }
     }
     return false;
+  }
+
+  /// Verifica conectividad y emite `noInternet` si no hay red.
+  Future<bool> checkInternetAndEmit() async {
+    final status = await Connectivity().checkConnectivity();
+    final ok = status != ConnectivityResult.none;
+    if (!ok) {
+      _controller.add(AppStatus.noInternet);
+    }
+    return ok;
   }
 }

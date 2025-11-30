@@ -11,21 +11,56 @@ import 'package:app_g/services/background_comm_service.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp();
+  // Inicializaciones mínimas que deben ocurrir ANTES de mostrar la UI:
+  try {
+    await Firebase.initializeApp().timeout(const Duration(seconds: 8), onTimeout: () {
+      logger.w('Firebase.initializeApp timeout, continuando en modo degradado.');
+      throw TimeoutException('Firebase.initializeApp timeout');
+    });
+  } catch (e) {
+    logger.e('Error inicializando Firebase: $e');
+  }
 
-  await  HiveService.initHive().then((_) {
+  try {
+    await HiveService.initHive()
+        .timeout(const Duration(seconds: 5), onTimeout: () {
+      logger.w('Hive init timeout; se intentará acceso lazy más tarde.');
+      return;
+    });
     logger.i('Hive inicializado');
-  }).catchError((e, st) {
-    debugPrint('❌ Error inicializando Hive: $e');
-  });
-  
-  BackgroundCommService.init();
+  } catch (e) {
+    debugPrint('❌ Error inicializando Hive (continuamos offline): $e');
+  }
 
-  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-
-  await FcmService.instance.init();
-
+  // Mostramos la app lo antes posible; inicializaciones secundarias después.
   runApp(const AppDetection());
+
+  // Inicializaciones que pueden ocurrir tras mostrar la UI (no bloquean arranque).
+  unawaited(_postBootInit());
+}
+
+Future<void> _postBootInit() async {
+  try {
+    BackgroundCommService.init();
+  } catch (e) {
+    logger.w('BackgroundCommService init falló: $e');
+  }
+
+  try {
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  } catch (e) {
+    logger.w('No se pudo registrar background handler FCM: $e');
+  }
+
+  try {
+    await FcmService.instance.init().timeout(const Duration(seconds: 6), onTimeout: () {
+      logger.w('FcmService init timeout, se reintentará manualmente más tarde.');
+      return;
+    });
+    logger.i('FcmService inicializado');
+  } catch (e) {
+    logger.w('FcmService init falló: $e');
+  }
 }
 
 class AppDetection extends StatelessWidget {

@@ -14,6 +14,7 @@ class SocketioService {
   static final List<_QueuedRetry> _queue = [];
   static bool _retriesActive = false;
   static StreamSubscription? _connectivitySub;
+  static String? lastPingError; // almacena el último error de ping para diagnóstico
 
   /// Inicializa el manejador de reintentos escuchando cambios de conectividad.
   static void initRetries({Connectivity? connectivity}) {
@@ -296,11 +297,13 @@ class SocketioService {
 
       socket.onConnectError((err) {
         logger.w('Ping: connectError $err');
+        try { lastPingError = err?.toString(); } catch (_) { lastPingError = '$err'; }
         finish(false);
       });
 
       socket.onError((err) {
         logger.w('Ping: error $err');
+        try { lastPingError = err?.toString(); } catch (_) { lastPingError = '$err'; }
         finish(false);
       });
 
@@ -309,11 +312,13 @@ class SocketioService {
 
       return await completer.future.timeout(const Duration(seconds: 6), onTimeout: () {
         logger.w('Ping: timeout de conexión');
+        lastPingError = 'timeout';
         socket.disconnect();
         return false;
       });
     } catch (e) {
       logger.e('Ping: excepción $e');
+      lastPingError = e.toString();
       return false;
     }
   }
