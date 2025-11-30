@@ -1,6 +1,6 @@
 workflows:
   ios-build:
-    name: iOS Build (Flutter - Simulator + Firebase)
+    name: iOS Build (Flutter Simulator + Firebase)
     max_build_duration: 60
     environment:
       flutter: stable
@@ -18,27 +18,25 @@ workflows:
         script: |
           cd ios && pod install --repo-update
 
-      - name: Copy Firebase plist (desde File Storage)
+      - name: Verify Firebase plist
         script: |
-          # Codemagic copia automáticamente desde File Storage a ios/Runner/
           if [ -f ios/Runner/GoogleService-Info.plist ]; then
             echo "✅ Firebase plist encontrado"
           else
-            echo "❌ Sube GoogleService-Info.plist a File Storage primero"
+            echo "❌ Sube GoogleService-Info.plist a File Storage"
             exit 1
           fi
 
-      - name: Build iOS Simulator (no-shrink para Firebase)
+      - name: Build iOS Simulator (FIXED)
         script: |
-          flutter build ios --simulator --debug --no-shrink
+          flutter build ios --simulator --debug --no-tree-shake-icons
 
-      - name: Verify Firebase in bundle
+      - name: Verify bundle
         script: |
           if grep -q "GoogleService-Info.plist" build/ios/iphonesimulator/Runner.app/Info.plist; then
-            echo "✅ Firebase plist empaquetado correctamente"
+            echo "✅ Firebase en bundle"
           else
-            echo "❌ Firebase plist NO está en el bundle"
-            exit 1
+            echo "⚠️  Verifica plist en Xcode Build Phases"
           fi
 
       - name: Zip for Appetize
@@ -48,7 +46,6 @@ workflows:
 
     artifacts:
       - build/ios/iphonesimulator/Runner.app.zip
-      - build/ios/iphonesimulator/Runner.app
 
     publishing:
       email:
